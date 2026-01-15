@@ -10,7 +10,7 @@ st.set_page_config(page_title="RAG PDF Chat", page_icon="📄")
 st.title("📄 Chat with your PDF (RAG)")
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-pro",
+    model="models/gemini-1.0-pro",
     api_key=st.secrets["GOOGLE_API_KEY"],
     temperature=0.2
 )
