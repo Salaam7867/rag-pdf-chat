@@ -56,8 +56,13 @@ if uploaded_file:
         context = "\n".join(d.page_content for d in docs)
 
         prompt = f"""
-Answer ONLY using the context below.
-If not found, say "Not found in document".
+You are an assistant that answers questions strictly from the given context.
+
+Rules:
+- Use ONLY the context.
+- Be concise.
+- Do NOT repeat the context.
+- If the answer is missing, reply exactly: Not found in document.
 
 Context:
 {context}
@@ -65,8 +70,9 @@ Context:
 Question:
 {question}
 
-You: output after generating the answer from that context
+Answer:
 """
+
 
         response = llm(prompt)[0]["generated_text"]
         st.subheader("Answer")
