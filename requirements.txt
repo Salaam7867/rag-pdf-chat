@@ -1,9 +1,9 @@
 streamlit
 langchain
 langchain-community
-langchain-google-genai
 langchain-text-splitters
+sentence-transformers
 faiss-cpu
 pypdf
-sentence-transformers
 torch
+transformers

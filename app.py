@@ -1,24 +1,37 @@
 import streamlit as st
-
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from transformers import pipeline
 
-st.set_page_config(page_title="RAG PDF Chat", page_icon="📄")
-st.title("📄 Chat with your PDF (RAG)")
+# Page config
+st.set_page_config(page_title="PDF Chat (Local RAG)", page_icon="📄")
+st.title("📄 Chat with your PDF (Local RAG)")
 
-llm = ChatGoogleGenerativeAI(
-    model="models/gemini-1.0-pro",
-    api_key=st.secrets["GOOGLE_API_KEY"],
-    temperature=0.2
-)
+# Load local LLM (CPU-friendly)
+@st.cache_resource
+def load_llm():
+    return pipeline(
+        "text-generation",
+        model="google/flan-t5-base",
+        max_new_tokens=256
+    )
+
+llm = load_llm()
+
+# Embeddings (LOCAL)
+@st.cache_resource
+def load_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+embeddings = load_embeddings()
 
 uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
 
-@st.cache_resource
-def build_vectorstore(pdf_bytes: bytes):
+def build_vectorstore(pdf_bytes):
     with open("temp.pdf", "wb") as f:
         f.write(pdf_bytes)
 
@@ -30,25 +43,21 @@ def build_vectorstore(pdf_bytes: bytes):
     )
     chunks = splitter.split_documents(docs)
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-
     return FAISS.from_documents(chunks, embeddings)
 
 if uploaded_file:
-    with st.spinner("Processing document..."):
+    with st.spinner("Processing PDF..."):
         vectorstore = build_vectorstore(uploaded_file.getvalue())
 
-    question = st.text_input("Ask a question from the document")
+    question = st.text_input("Ask a question")
 
     if question:
         docs = vectorstore.similarity_search(question, k=3)
         context = "\n".join(d.page_content for d in docs)
 
         prompt = f"""
-Answer the question ONLY using the context below.
-If the answer is not in the context, say "Not found in document".
+Answer ONLY using the context below.
+If not found, say "Not found in document".
 
 Context:
 {context}
@@ -57,6 +66,6 @@ Question:
 {question}
 """
 
-        answer = llm.invoke(prompt)
+        response = llm(prompt)[0]["generated_text"]
         st.subheader("Answer")
-        st.write(answer.content)
+        st.write(response)
