@@ -4,6 +4,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from transformers import pipeline
+from langchain_core.messages import SystemMessage, HumanMessage
 
 # Page config
 st.set_page_config(page_title="PDF Chat (Local RAG)", page_icon="📄")
@@ -55,25 +56,28 @@ if uploaded_file:
         docs = vectorstore.similarity_search(question, k=3)
         context = "\n".join(d.page_content for d in docs)
 
-        prompt = f"""
-You are an assistant that answers questions strictly from the given context.
-
-Rules:
-- Use ONLY the context.
-- Be concise.
-- Do NOT repeat the context.
-- If the answer is missing, reply exactly: Not found in document.
-
+        messages = [
+    SystemMessage(
+        content=(
+            "You answer questions strictly using the provided context.\n"
+            "Rules:\n"
+            "- Use ONLY the context\n"
+            "- Be concise\n"
+            "- Do NOT repeat the context\n"
+            "- If missing, reply exactly: Not found in document"
+        )
+    ),
+    HumanMessage(
+        content=f"""
 Context:
 {context}
 
 Question:
 {question}
-
-Answer:
 """
+    )
+]
 
+response = llm.invoke(messages)
+st.write(response.content)
 
-        response = llm(prompt)[0]["generated_text"]
-        st.subheader("Answer")
-        st.write(response)
