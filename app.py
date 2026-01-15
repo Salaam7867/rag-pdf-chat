@@ -25,12 +25,11 @@ llm = ChatGoogleGenerativeAI(
 uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
 
 @st.cache_resource(show_spinner=False)
-def build_vectorstore(pdf_bytes):
+def build_vectorstore(pdf_bytes: bytes):
     with open("temp.pdf", "wb") as f:
         f.write(pdf_bytes)
 
-    loader = PyPDFLoader("temp.pdf")
-    docs = loader.load()
+    docs = PyPDFLoader("temp.pdf").load()
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -40,10 +39,11 @@ def build_vectorstore(pdf_bytes):
 
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001",
-        google_api_key=os.getenv("GOOGLE_API_KEY")
+        google_api_key=st.secrets["GOOGLE_API_KEY"]
     )
 
     return FAISS.from_documents(chunks, embeddings)
+
 
 if uploaded_file:
     with st.spinner("Processing document..."):
