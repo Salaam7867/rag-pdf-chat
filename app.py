@@ -55,29 +55,30 @@ if uploaded_file:
     if question:
         docs = vectorstore.similarity_search(question, k=3)
         context = "\n".join(d.page_content for d in docs)
+        
+        prompt = f"""
+        You are an assistant that answers questions strictly using the given context.
+        
+        Rules:
+        - Use ONLY the context
+        - Be concise
+        - Do NOT repeat the context
+        - If the answer is missing, reply exactly: Not found in document
+        
+        Context:
+        {context}
+        
+        Question:
+        {question}
+        
+        Answer:
+        """
+        
+        output = llm(prompt)
+        
+        # HuggingFace pipeline returns a list
+        answer = output[0]["generated_text"]
+        
+        st.write(answer)
 
-        messages = [
-    SystemMessage(
-        content=(
-            "You answer questions strictly using the provided context.\n"
-            "Rules:\n"
-            "- Use ONLY the context\n"
-            "- Be concise\n"
-            "- Do NOT repeat the context\n"
-            "- If missing, reply exactly: Not found in document"
-        )
-    ),
-    HumanMessage(
-        content=f"""
-Context:
-{context}
-
-Question:
-{question}
-"""
-    )
-]
-
-response = llm.invoke(messages)
-st.write(response.content)
 
