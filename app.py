@@ -4,16 +4,17 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from transformers import pipeline
-import tempfile, os
+import tempfile
+import os
 
 # -----------------------------
-# UI
+# Page config
 # -----------------------------
-st.set_page_config(page_title="Local RAG (Phi-2)", layout="wide")
-st.title("📄 Local RAG – Phi-2 (No API, No Echo)")
+st.set_page_config(page_title="Local PDF RAG", layout="wide")
+st.title("📄 Local RAG – Chat with PDF (No API)")
 
 # -----------------------------
-# Embeddings
+# Load LOCAL embeddings
 # -----------------------------
 @st.cache_resource
 def load_embeddings():
@@ -24,78 +25,81 @@ def load_embeddings():
 embeddings = load_embeddings()
 
 # -----------------------------
-# LLM (Phi-2)
+# Load LOCAL LLM (instruction model)
+# IMPORTANT: we will NOT pass raw prompt
 # -----------------------------
 @st.cache_resource
 def load_llm():
     return pipeline(
-        "text-generation",
-        model="microsoft/phi-2",
-        torch_dtype="auto",
-        device=-1,
-        max_new_tokens=200,
-        do_sample=False,
-        temperature=0.0
+        "text2text-generation",
+        model="google/flan-t5-base",
+        max_new_tokens=200
     )
 
 llm = load_llm()
 
 # -----------------------------
-# Vector store
+# PDF upload
+# -----------------------------
+uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+
+# -----------------------------
+# Build vector store
 # -----------------------------
 def build_vectorstore(uploaded_file):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
-        path = tmp.name
+        pdf_path = tmp.name
 
-    docs = PyPDFLoader(path).load()
+    loader = PyPDFLoader(pdf_path)
+    documents = loader.load()
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=400,
         chunk_overlap=50
     )
-    chunks = splitter.split_documents(docs)
+    chunks = splitter.split_documents(documents)
 
-    os.remove(path)
-    return FAISS.from_documents(chunks, embeddings)
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+
+    os.remove(pdf_path)
+    return vectorstore
 
 # -----------------------------
-# Answer generation (IMPORTANT)
+# Answer generation (CORRECT WAY)
 # -----------------------------
-def answer_question(context, question):
+def generate_answer(context, question):
     prompt = (
-        "You are a factual assistant.\n"
-        "Answer ONLY using the context.\n"
-        "If the answer is missing, say: Not found in document.\n\n"
+        "Answer the question using ONLY the context below.\n"
+        "If the answer is not present, say: Not found in document.\n\n"
         f"Context:\n{context}\n\n"
-        f"Question: {question}\n"
+        f"Question:\n{question}\n\n"
         "Answer:"
     )
 
-    output = llm(prompt)[0]["generated_text"]
-    return output.split("Answer:")[-1].strip()
+    result = llm(prompt)[0]["generated_text"]
+    return result.strip()
 
 # -----------------------------
-# App logic
+# Main logic
 # -----------------------------
-uploaded_file = st.file_uploader("Upload PDF", type="pdf")
-
 if uploaded_file:
     with st.spinner("Indexing document..."):
         vectorstore = build_vectorstore(uploaded_file)
 
-    question = st.text_input("Ask a question")
+    question = st.text_input("Ask a question from the document")
 
     if question:
         docs = vectorstore.similarity_search(question, k=3)
-        context = "\n\n".join(d.page_content for d in docs)
 
-        answer = answer_question(context, question)
+        context = "\n\n".join([doc.page_content for doc in docs])
+
+        answer = generate_answer(context, question)
 
         st.subheader("Answer")
         st.write(answer)
 
         st.subheader("Sources")
-        for i, d in enumerate(docs, 1):
+        for i, doc in enumerate(docs, 1):
             st.write(f"Source {i}:")
-            st.write(d.page_content[:300] + "...")
+            st.write(doc.page_content[:300] + "...")
