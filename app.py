@@ -32,7 +32,8 @@ embeddings = load_embeddings()
 def load_llm():
     return pipeline(
         "text2text-generation",
-        model="google/flan-t5-base",
+        model="mistralai/Mistral-7B-Instruct-v0.1",
+        device=-1,  # Set device to CPU; use device=0 for GPU if available
         max_new_tokens=200
     )
 
