@@ -71,7 +71,7 @@ def build_vectorstore(uploaded_file):
 def generate_answer(context, question):
     prompt = (
         "Answer the question using ONLY the context below.\n"
-        "If the answer is not present, say: Not found in document.\n\n"
+        "Be descriptive and use that context to generate a response "
         f"Context:\n{context}\n\n"
         f"Question:\n{question}\n\n"
         "Answer:"
