@@ -4,17 +4,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from transformers import pipeline
-import tempfile
-import os
+import tempfile, os
 
 # -----------------------------
-# Page config
+# UI
 # -----------------------------
-st.set_page_config(page_title="Local PDF RAG", layout="wide")
-st.title("📄 Local RAG – Chat with PDF (No API)")
+st.set_page_config(page_title="Local RAG (Phi-2)", layout="wide")
+st.title("📄 Local RAG – Phi-2 (No API, No Echo)")
 
 # -----------------------------
-# Load LOCAL embeddings
+# Embeddings
 # -----------------------------
 @st.cache_resource
 def load_embeddings():
@@ -25,79 +24,78 @@ def load_embeddings():
 embeddings = load_embeddings()
 
 # -----------------------------
-# Load LOCAL LLM (Mistral-7B-Instruct)
+# LLM (Phi-2)
 # -----------------------------
 @st.cache_resource
 def load_llm():
     return pipeline(
-        "text2text-generation",
-        model="mistralai/Mistral-7B-Instruct-v0.1",
-        device=-1,  # Set device to CPU; use device=0 for GPU if available
-        max_new_tokens=200
+        "text-generation",
+        model="microsoft/phi-2",
+        torch_dtype="auto",
+        device=-1,
+        max_new_tokens=200,
+        do_sample=False,
+        temperature=0.0
     )
 
 llm = load_llm()
 
 # -----------------------------
-# PDF upload
-# -----------------------------
-uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
-
-# -----------------------------
-# Build vector store
+# Vector store
 # -----------------------------
 def build_vectorstore(uploaded_file):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
-        pdf_path = tmp.name
+        path = tmp.name
 
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
+    docs = PyPDFLoader(path).load()
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=400,
         chunk_overlap=50
     )
-    chunks = splitter.split_documents(documents)
+    chunks = splitter.split_documents(docs)
 
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-
-    os.remove(pdf_path)
-    return vectorstore
+    os.remove(path)
+    return FAISS.from_documents(chunks, embeddings)
 
 # -----------------------------
-# Answer generation (Mistral-7B-Instruct)
+# Answer generation (IMPORTANT)
 # -----------------------------
-def generate_answer(context, question):
+def answer_question(context, question):
     prompt = (
-        "Answer the question using only the context below.\n"
-        "If the answer is not in the context, say: Not found in document.\n\n"
+        "You are a factual assistant.\n"
+        "Answer ONLY using the context.\n"
+        "If the answer is missing, say: Not found in document.\n\n"
         f"Context:\n{context}\n\n"
-        f"Question:\n{question}\n\n"
+        f"Question: {question}\n"
         "Answer:"
     )
-    result = llm(prompt)[0]["generated_text"]
-    return result.strip()
+
+    output = llm(prompt)[0]["generated_text"]
+    return output.split("Answer:")[-1].strip()
 
 # -----------------------------
-# Main logic
+# App logic
 # -----------------------------
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+
 if uploaded_file:
     with st.spinner("Indexing document..."):
         vectorstore = build_vectorstore(uploaded_file)
 
-    question = st.text_input("Ask a question from the document")
+    question = st.text_input("Ask a question")
 
     if question:
         docs = vectorstore.similarity_search(question, k=3)
-        context = "\n\n".join([doc.page_content for doc in docs])
+        context = "\n\n".join(d.page_content for d in docs)
 
-        answer = generate_answer(context, question)
+        answer = answer_question(context, question)
 
         st.subheader("Answer")
         st.write(answer)
 
         st.subheader("Sources")
-        for i, doc in enumerate(docs, 1):
+        for i, d in enumerate(docs, 1):
             st.write(f"Source {i}:")
-            st.write(doc.page_content[:300] + "...")
+            st.write(d.page_content[:300] + "...")
