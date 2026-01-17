@@ -25,8 +25,7 @@ def load_embeddings():
 embeddings = load_embeddings()
 
 # -----------------------------
-# Load LOCAL LLM (instruction model)
-# IMPORTANT: we will NOT pass raw prompt
+# Load LOCAL LLM (Mistral-7B-Instruct)
 # -----------------------------
 @st.cache_resource
 def load_llm():
@@ -67,17 +66,16 @@ def build_vectorstore(uploaded_file):
     return vectorstore
 
 # -----------------------------
-# Answer generation (CORRECT WAY)
+# Answer generation (Mistral-7B-Instruct)
 # -----------------------------
 def generate_answer(context, question):
     prompt = (
-        "Answer the question using ONLY the context below.\n"
-        "Be descriptive and use that context to generate a response "
+        "Answer the question using only the context below.\n"
+        "If the answer is not in the context, say: Not found in document.\n\n"
         f"Context:\n{context}\n\n"
         f"Question:\n{question}\n\n"
         "Answer:"
     )
-
     result = llm(prompt)[0]["generated_text"]
     return result.strip()
 
@@ -92,7 +90,6 @@ if uploaded_file:
 
     if question:
         docs = vectorstore.similarity_search(question, k=3)
-
         context = "\n\n".join([doc.page_content for doc in docs])
 
         answer = generate_answer(context, question)
