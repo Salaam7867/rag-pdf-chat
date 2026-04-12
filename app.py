@@ -36,14 +36,12 @@ def get_groq_api_key():
         pass
     return os.getenv("GROQ_API_KEY")
 
-
 # -----------------------------
 # Cached resources
 # -----------------------------
 @st.cache_resource
 def load_embeddings_model():
     return SentenceTransformer(EMBEDDING_MODEL_NAME)
-
 
 @st.cache_resource
 def load_llm():
@@ -57,207 +55,121 @@ def load_llm():
         groq_api_key=api_key,
     )
 
-
 embeddings_model = load_embeddings_model()
 llm = load_llm()
 
 # -----------------------------
-# Vector store manager (in-memory, safe for Streamlit Cloud)
+# Vector store (in-memory)
 # -----------------------------
 class VectorStoreManager:
     def __init__(self, collection_name: str):
-        self.collection_name = collection_name
-        self.client = chromadb.Client()  # In-memory, not persistent
-        self.collection = self.client.get_or_create_collection(
-            name=self.collection_name,
-            metadata={"description": "RAG vector store for PDF embeddings"},
-        )
+        self.client = chromadb.Client()
+        self.collection = self.client.get_or_create_collection(name=collection_name)
 
     def add_documents(self, documents, embeddings):
-        if len(documents) != len(embeddings):
-            raise ValueError("Number of documents does not match number of embeddings")
+        ids, docs, metas, embs = [], [], [], []
 
-        ids = []
-        docs = []
-        metadatas = []
-        embs = []
-
-        for i, (doc, embedding) in enumerate(zip(documents, embeddings)):
+        for i, (doc, emb) in enumerate(zip(documents, embeddings)):
             ids.append(f"doc_{i}")
             docs.append(doc.page_content)
-            metadatas.append(
-                {
-                    **dict(doc.metadata),
-                    "chunk_index": i,
-                    "content_length": len(doc.page_content),
-                }
-            )
-            embs.append(embedding.tolist())
+            metas.append(doc.metadata)
+            embs.append(emb.tolist())
 
         self.collection.add(
             ids=ids,
             documents=docs,
-            metadatas=metadatas,
+            metadatas=metas,
             embeddings=embs,
         )
 
-    def query(self, query_embedding, top_k=3):
+    def query(self, embedding, k=3):
         return self.collection.query(
-            query_embeddings=[query_embedding.tolist()],
-            n_results=top_k,
+            query_embeddings=[embedding.tolist()],
+            n_results=k,
         )
-
-    def count(self):
-        return self.collection.count()
-
 
 # -----------------------------
 # PDF processing
 # -----------------------------
-@st.cache_data(show_spinner=False)
-def extract_pdf_documents(pdf_bytes: bytes):
+@st.cache_data
+def extract_pdf(pdf_bytes):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(pdf_bytes)
-        temp_path = tmp.name
+        path = tmp.name
 
-    try:
-        loader = PyPDFLoader(temp_path)
-        return loader.load()
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    loader = PyPDFLoader(path)
+    docs = loader.load()
 
+    os.remove(path)
+    return docs
 
-def split_documents(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
+def split_docs(docs):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
     )
-    return splitter.split_documents(documents)
+    return splitter.split_documents(docs)
 
+def build_vectorstore(file):
+    pdf_bytes = file.getvalue()
+    docs = extract_pdf(pdf_bytes)
+    chunks = split_docs(docs)
 
-def build_vectorstore(uploaded_file):
-    pdf_bytes = uploaded_file.getvalue()
-    file_hash = hashlib.md5(pdf_bytes).hexdigest()  # nosec - used only for cache/keying
-    collection_name = f"pdf_{file_hash[:10]}"
+    texts = [d.page_content for d in chunks]
+    embeddings = embeddings_model.encode(texts)
 
-    raw_documents = extract_pdf_documents(pdf_bytes)
-    chunks = split_documents(raw_documents)
+    vs = VectorStoreManager("pdf_store")
+    vs.add_documents(chunks, embeddings)
 
-    texts = [doc.page_content for doc in chunks]
-    chunk_embeddings = embeddings_model.encode(texts, show_progress_bar=False)
-
-    vector_store = VectorStoreManager(collection_name=collection_name)
-    vector_store.add_documents(chunks, chunk_embeddings)
-
-    return vector_store, len(raw_documents), len(chunks), collection_name
-
+    return vs, len(docs), len(chunks)
 
 # -----------------------------
-# LLM answer generation
+# Answer generation
 # -----------------------------
 def generate_answer(context, question):
     prompt = (
-        "You are a helpful assistant. Answer using ONLY the context below. "
-        "If the answer is not present, reply exactly: Not found in document."
-        
-        f"Context:
-{context}
-
-"
-        f"Question:
-{question}
-
-"
+        "You are a helpful assistant. Answer using ONLY the context below.\n"
+        "If the answer is not present, reply exactly: Not found in document.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question:\n{question}\n\n"
         "Answer:"
     )
 
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content.strip()
 
-
 # -----------------------------
-# Sidebar
+# App
 # -----------------------------
-st.sidebar.header("Settings")
-st.sidebar.write(f"Embedding model: `{EMBEDDING_MODEL_NAME}`")
-st.sidebar.write(f"LLM model: `{DEFAULT_MODEL_NAME}`")
-
-if st.sidebar.button("Reset current session"):
-    for key in ["vector_store", "file_hash", "file_name", "page_count", "chunk_count", "collection_name"]:
-        st.session_state.pop(key, None)
-    st.rerun()
-
-# -----------------------------
-# App body
-# -----------------------------
-api_key = get_groq_api_key()
-if not api_key:
-    st.error("Groq API key not found. Add GROQ_API_KEY in Streamlit secrets or environment variables.")
+if not llm:
+    st.error("❌ GROQ_API_KEY not found")
     st.stop()
 
-uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+file = st.file_uploader("Upload PDF", type="pdf")
 
-if uploaded_file is not None:
-    pdf_bytes = uploaded_file.getvalue()
-    current_hash = hashlib.md5(pdf_bytes).hexdigest()  # nosec - used only for cache/keying
+if file:
+    with st.spinner("Processing..."):
+        vs, pages, chunks = build_vectorstore(file)
 
-    needs_rebuild = (
-        "vector_store" not in st.session_state
-        or st.session_state.get("file_hash") != current_hash
-    )
+    st.success(f"{pages} pages → {chunks} chunks")
 
-    if needs_rebuild:
-        with st.spinner("Indexing document..."):
-            vector_store, page_count, chunk_count, collection_name = build_vectorstore(uploaded_file)
+    question = st.text_input("Ask something")
 
-            st.session_state["vector_store"] = vector_store
-            st.session_state["file_hash"] = current_hash
-            st.session_state["file_name"] = uploaded_file.name
-            st.session_state["page_count"] = page_count
-            st.session_state["chunk_count"] = chunk_count
-            st.session_state["collection_name"] = collection_name
+    if question:
+        q_emb = embeddings_model.encode([question])[0]
+        results = vs.query(q_emb, TOP_K)
 
-    vector_store = st.session_state["vector_store"]
+        docs = results["documents"][0]
+        context = "\n\n".join(docs)
 
-    st.success(f"Indexed {st.session_state['page_count']} pages into {st.session_state['chunk_count']} chunks.")
-    st.caption(f"Collection: {st.session_state['collection_name']} | Stored chunks: {vector_store.count()}")
+        answer = generate_answer(context, question)
 
-    question = st.text_input("Ask a question from the document")
+        st.subheader("Answer")
+        st.write(answer)
 
-    if question.strip():
-        query_embedding = embeddings_model.encode([question])[0]
-        results = vector_store.query(query_embedding, top_k=TOP_K)
-
-        docs = []
-        if results.get("documents") and results["documents"][0]:
-            for i, doc_text in enumerate(results["documents"][0]):
-                metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
-                distance = results["distances"][0][i] if results.get("distances") else None
-                docs.append({
-                    "text": doc_text,
-                    "metadata": metadata,
-                    "distance": distance,
-                    "rank": i + 1,
-                })
-
-        if not docs:
-            st.warning("No relevant context found in the document.")
-        else:
-            context = "
-
-".join([item["text"] for item in docs])
-            answer = generate_answer(context, question)
-
-            st.subheader("Answer")
-            st.write(answer)
-
-            st.subheader("Sources")
-            for item in docs:
-                page_num = item["metadata"].get("page", "N/A")
-                st.write(f"Source {item['rank']} | Page: {page_num} | Distance: {item['distance']}")
-                st.write(item["text"][:500] + "...")
-                st.json(item["metadata"])
-                st.divider()
+        st.subheader("Sources")
+        for i, d in enumerate(docs):
+            st.write(f"Source {i+1}")
+            st.write(d[:300] + "...")
 else:
-    st.info("Upload a PDF to build the index and ask questions.")
+    st.info("Upload a PDF")
