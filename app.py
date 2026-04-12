@@ -198,20 +198,26 @@ if file:
 
     st.success(f"{file_name} | {pages} pages → {chunk_count} chunks")
 
+    if "question_text" not in st.session_state:
+        st.session_state["question_text"] = ""
+
     question = st.text_input(
         "Ask a question",
-        value=st.session_state.get("question_text", ""),
-        key="question_input",
+        key="question_text"
     )
 
-    if question.strip():
+    if st.session_state.get("question_text", "").strip():
+        question = st.session_state["question_text"]
+
         retrieved = simple_retrieval(chunks, chunk_embeddings, question, TOP_K)
 
         if not retrieved:
             st.warning("No relevant content found.")
         else:
             context = "\n\n".join([item["chunk"].page_content for item in retrieved])
-            answer = generate_answer(context, question)
+
+            with st.spinner("Generating answer..."):
+                answer = generate_answer(context, question)
 
             st.subheader("Answer")
             st.write(answer)
