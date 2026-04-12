@@ -1,9 +1,7 @@
 streamlit
+chromadb
+sentence-transformers
 langchain
 langchain-community
-langchain-text-splitters
-faiss-cpu
+langchain-groq
 pypdf
-sentence-transformers
-transformers
-torch
