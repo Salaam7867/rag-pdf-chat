@@ -1,7 +1,10 @@
 streamlit
-chromadb
-sentence-transformers
 langchain
 langchain-community
 langchain-groq
+sentence-transformers
 pypdf
+numpy
+torch
+transformers
+torchvision
