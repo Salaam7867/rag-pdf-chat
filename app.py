@@ -159,7 +159,7 @@ def build_vectorstore(uploaded_file):
 def generate_answer(context, question):
     prompt = (
         "You are a helpful assistant. Answer using ONLY the context below. "
-        "If the answer is not present, reply exactly: Not found in document.
+        "If the answer is not present, reply exactly: Not found in document."
 
 "
         f"Context:
