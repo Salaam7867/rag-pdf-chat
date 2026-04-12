@@ -14,8 +14,10 @@ from langchain_core.messages import HumanMessage
 # -----------------------------
 # Config
 # -----------------------------
-st.set_page_config(page_title="RAG PDF Chat", layout="wide")
-st.title("📄 RAG – Chat with PDF")
+st.set_page_config(page_title="InsightRAG", layout="wide")
+
+st.title("🚀 InsightRAG: Context-Aware PDF QA System")
+st.caption("AI-powered document assistant using Retrieval-Augmented Generation (RAG)")
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
