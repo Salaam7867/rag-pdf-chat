@@ -46,7 +46,7 @@ PDF → Text Extraction → Chunking → Embeddings → Retrieval → LLM → An
 ## 🚀 Installation
 
 ```bash
-git clone https://github.com/your-username/InsightRAG
+git clone https://github.com/Salaam7867/InsightRAG
 cd InsightRAG
 pip install -r requirements.txt
 streamlit run app.py
