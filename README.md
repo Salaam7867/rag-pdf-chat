@@ -16,7 +16,6 @@
 ---
 
 ## 🧠 How It Works
-
 ```
 PDF → Text Extraction → Chunking → Embeddings → Retrieval → LLM → Answer
 ```
