@@ -144,10 +144,7 @@ def generate_answer(context, question):
         return "GROQ_API_KEY is missing."
 
     prompt = (
-        "You are a strict document assistant.\n"
-        "Answer using ONLY the context below.\n"
-        "If the answer is not explicitly present, reply exactly: Not found in document.\n"
-        "Do not guess.\n\n"
+        "Based strictly on the facts present in the context, synthesize an evaluation... If the context lacks sufficient background to answer, state what is missing."
         f"Context:\n{context}\n\n"
         f"Question:\n{question}\n\n"
         "Answer:"
