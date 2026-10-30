@@ -286,10 +286,12 @@ if file:
     if "question_text" not in st.session_state:
         st.session_state["question_text"] = ""
 
-    question = st.text_input(
-        "Ask a question",
-        key="question_text"
-    )
+    question = st.text_area(
+    "Paste Job Description",
+    key="question_text",
+    height=250,
+    placeholder="Paste the complete job description here..."
+)
 
     if st.session_state.get("question_text", "").strip():
         question = st.session_state["question_text"]
