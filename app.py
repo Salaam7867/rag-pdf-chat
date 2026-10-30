@@ -340,11 +340,9 @@ question = st.text_area(
     placeholder="Paste the complete job description here..."
 )
 
-analyze_clicked = st.button(
-    "Analyze Resume",
-    type="primary",
-    use_container_width=True
-)
+col1, col2, col3 = st.columns([1, 2, 3])
+with col1:
+    analyze_clicked = st.button("Analyze Resume", type="primary", use_container_width=True)
 
 # -----------------------------
 # Analysis
