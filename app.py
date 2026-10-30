@@ -351,7 +351,10 @@ analyze_clicked = st.button(
 # -----------------------------
 if analyze_clicked:
 
-    if not question.strip():
+    if not file:
+        st.warning("Please upload a PDF first.")
+
+    elif not question.strip():
         st.warning("Please paste a job description first.")
 
     else:
