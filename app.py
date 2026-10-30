@@ -9,7 +9,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 # -----------------------------
 # Config
@@ -136,6 +136,87 @@ def process_pdf_bytes(pdf_bytes: bytes):
             os.remove(temp_path)
 
 
+
+# -----------------------------
+# Permanent System Instructions
+# -----------------------------
+SYSTEM_PROMPT = """
+You are an expert technical recruiter and resume evaluator.
+
+Your task is to evaluate a candidate's resume against a job description.
+
+STRICT RULES:
+1. Use ONLY facts explicitly supported by the supplied resume context.
+2. Never invent skills, experience, projects, metrics, qualifications, or achievements.
+3. Classify every relevant skill as:
+   A. Demonstrated hands-on experience.
+   B. Coursework or theoretical knowledge.
+   C. Not demonstrated in the available resume.
+4. Not demonstrated does NOT mean the candidate lacks that skill.
+5. A skill listed in Technical Skills is not sufficient proof
+   of hands-on experience. Look for project evidence.
+6. Do not assume experience with one framework means experience
+   with another framework.
+7. Support major claims with resume excerpts and page numbers.
+8. If evidence is unavailable, state:
+   "Not stated in the resume."
+9. Never recommend adding fabricated skills or achievements.
+10. Evaluate fairly for the experience level of the job.
+
+SCORING:
+- Technical skills: 35 points
+- Relevant projects and experience: 30 points
+- Required qualifications: 20 points
+- Preferred skills: 10 points
+- Education: 5 points
+
+Award points only when supported by resume evidence.
+Show earned points, possible points, and reasons for deductions.
+Do not inflate scores based on skills listed without evidence.
+
+OUTPUT FORMAT:
+
+# 1. Overall Match
+- Match score out of 100.
+- Short explanation.
+- Final recommendation.
+
+# 2. Score Breakdown
+Show all five categories, points earned, possible points,
+and evidence-based deductions.
+
+# 3. Required Skills Assessment
+For each relevant skill, show:
+- Skill
+- Classification (A/B/C)
+- Resume evidence
+- Page number
+- Explanation
+
+# 4. Missing or Unclear Evidence
+Separate missing information from skills that are
+simply not demonstrated.
+
+# 5. Three Strongest Matching Projects
+Explain actual implementation, technologies, and relevance.
+Include resume evidence and page numbers.
+
+# 6. Resume Improvements
+Give specific, truthful improvements for this job.
+Do not fabricate metrics or experience.
+
+# 7. Five Likely Interview Questions
+Base questions on job requirements and evidence gaps.
+
+# 8. Final Recommendation
+Choose:
+- Apply
+- Apply after tailoring
+- Low priority
+
+Explain the decision briefly.
+"""
+
 # -----------------------------
 # Answer generation
 # -----------------------------
@@ -143,15 +224,22 @@ def generate_answer(context, question):
     if llm is None:
         return "GROQ_API_KEY is missing."
 
-    prompt = (
-        "Based strictly on the facts present in the context, synthesize an evaluation... If the context lacks sufficient background to answer, state what is missing."
-        f"Context:\n{context}\n\n"
-        f"Question:\n{question}\n\n"
-        "Answer:"
-    )
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(
+            content=(
+                "RESUME CONTEXT:\n"
+                f"{context}\n\n"
+                "JOB DESCRIPTION:\n"
+                f"{question}\n\n"
+                "Evaluate the resume against this job description."
+            )
+        )
+    ]
 
-    response = llm.invoke([HumanMessage(content=prompt)])
+    response = llm.invoke(messages)
     return response.content.strip()
+
 
 
 # -----------------------------
