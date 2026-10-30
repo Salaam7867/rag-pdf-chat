@@ -284,41 +284,37 @@ with st.sidebar:
         if st.button(prompt_text, use_container_width=True):
             st.session_state["question_text"] = prompt_text
 
+
 file = st.file_uploader("Upload PDF", type="pdf")
 
 if file:
+    # Read uploaded PDF
     pdf_bytes = file.getvalue()
     file_hash = hashlib.md5(pdf_bytes).hexdigest()
 
-    
-if (
-    "file_hash" not in st.session_state
-    or st.session_state.get("file_hash") != file_hash
-):
-    # Clear results from the previously uploaded resume
-    st.session_state.pop("analysis_result", None)
-    st.session_state.pop("retrieved_context", None)
-    st.session_state.pop("retrieved_sources", None)
-    st.session_state.pop("analyzed_question", None)
+    # Process only if this is a new or changed PDF
+    if st.session_state.get("file_hash") != file_hash:
 
-    with st.spinner("Processing..."):
-        chunks, pages, chunk_count, chunk_embeddings = process_pdf_bytes(pdf_bytes)
+        # Clear previous evaluation results
+        st.session_state.pop("analysis_result", None)
+        st.session_state.pop("retrieved_context", None)
+        st.session_state.pop("retrieved_sources", None)
+        st.session_state.pop("analyzed_question", None)
 
-    st.session_state["file_hash"] = file_hash
-    st.session_state["chunks"] = chunks
-    st.session_state["chunk_embeddings"] = chunk_embeddings
-    st.session_state["pages"] = pages
-    st.session_state["chunk_count"] = chunk_count
-    st.session_state["file_name"] = file.name
+        with st.spinner("Processing PDF..."):
+            chunks, pages, chunk_count, chunk_embeddings = (
+                process_pdf_bytes(pdf_bytes)
+            )
 
+        # Save newly processed PDF
+        st.session_state["file_hash"] = file_hash
+        st.session_state["chunks"] = chunks
+        st.session_state["chunk_embeddings"] = chunk_embeddings
+        st.session_state["pages"] = pages
+        st.session_state["chunk_count"] = chunk_count
+        st.session_state["file_name"] = file.name
 
-        
-    st.session_state["chunks"] = chunks
-    st.session_state["chunk_embeddings"] = chunk_embeddings
-    st.session_state["pages"] = pages
-    st.session_state["chunk_count"] = chunk_count
-    st.session_state["file_name"] = file.name
-
+    # Load processed data on EVERY rerun
     chunks = st.session_state["chunks"]
     chunk_embeddings = st.session_state["chunk_embeddings"]
     pages = st.session_state["pages"]
@@ -329,6 +325,9 @@ if (
 
     if "question_text" not in st.session_state:
         st.session_state["question_text"] = ""
+
+else:
+    st.info("Upload a PDF")
 
     
 # -----------------------------
