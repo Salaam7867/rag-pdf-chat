@@ -315,43 +315,94 @@ if file:
     if "question_text" not in st.session_state:
         st.session_state["question_text"] = ""
 
-    question = st.text_area(
+    
+# -----------------------------
+# Job Description Input
+# -----------------------------
+question = st.text_area(
     "Paste Job Description",
     key="question_text",
     height=250,
     placeholder="Paste the complete job description here..."
 )
 
-    if st.session_state.get("question_text", "").strip():
-        question = st.session_state["question_text"]
+analyze_clicked = st.button(
+    "Analyze Resume",
+    type="primary",
+    use_container_width=True
+)
 
-        retrieved = simple_retrieval(chunks, chunk_embeddings, question, TOP_K)
+# -----------------------------
+# Analysis
+# -----------------------------
+if analyze_clicked:
 
-        if not retrieved:
-            st.warning("No relevant content found.")
-        else:
-            context = "\n\n".join([item["chunk"].page_content for item in retrieved])
+    if not question.strip():
+        st.warning("Please paste a job description first.")
 
-            with st.spinner("Generating answer..."):
+    else:
+        with st.spinner("Analyzing resume against job description..."):
+
+            retrieved = simple_retrieval(
+                chunks,
+                chunk_embeddings,
+                question,
+                TOP_K
+            )
+
+            if not retrieved:
+                st.warning("No relevant resume content found.")
+
+            else:
+                context = "\n\n".join(
+                    [
+                        f"Page {item['chunk'].metadata.get('page', 0) + 1}:\n"
+                        f"{item['chunk'].page_content}"
+                        for item in retrieved
+                    ]
+                )
+
                 answer = generate_answer(context, question)
 
-            st.subheader("Answer")
-            st.write(answer)
+                st.session_state["analysis_result"] = answer
+                st.session_state["retrieved_context"] = context
+                st.session_state["retrieved_sources"] = retrieved
+                st.session_state["analyzed_question"] = question
 
-            st.caption(f"Top {len(retrieved)} retrieved chunks used.")
+# -----------------------------
+# Display Results
+# -----------------------------
+if st.session_state.get("analysis_result"):
 
-            with st.expander("Retrieved context"):
-                st.write(context)
+    st.divider()
+    st.subheader("Resume Evaluation")
 
-            st.subheader("Sources")
-            for i, item in enumerate(retrieved, 1):
-                chunk = item["chunk"]
-                score = item["score"]
-                page_num = chunk.metadata.get("page")
-                page_num = page_num + 1 if page_num is not None else "N/A"
+    st.markdown(st.session_state["analysis_result"])
 
-                st.write(f"Source {i} | Page: {page_num} | Similarity: {score:.4f}")
-                st.write(chunk.page_content[:400] + "...")
-                st.divider()
+    st.caption(
+        f"Top {len(st.session_state['retrieved_sources'])} "
+        "retrieved chunks used."
+    )
+
+    with st.expander("Retrieved context"):
+        st.write(st.session_state["retrieved_context"])
+
+    with st.expander("Sources and similarity scores"):
+
+        for i, item in enumerate(
+            st.session_state["retrieved_sources"], 1
+        ):
+            chunk = item["chunk"]
+            score = item["score"]
+            page_num = chunk.metadata.get("page", 0) + 1
+
+            st.write(
+                f"Source {i} | Page: {page_num} | "
+                f"Similarity: {score:.4f}"
+            )
+
+            st.write(chunk.page_content)
+            st.divider()
+
 else:
     st.info("Upload a PDF")
