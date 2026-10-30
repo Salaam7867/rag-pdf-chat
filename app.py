@@ -347,7 +347,8 @@ if file:
             for i, item in enumerate(retrieved, 1):
                 chunk = item["chunk"]
                 score = item["score"]
-                page_num = chunk.metadata.get("page", "N/A")
+                page_num = chunk.metadata.get("page")
+                page_num = page_num + 1 if page_num is not None else "N/A"
 
                 st.write(f"Source {i} | Page: {page_num} | Similarity: {score:.4f}")
                 st.write(chunk.page_content[:400] + "...")
