@@ -20,7 +20,7 @@ st.caption("AI-powered document assistant using Retrieval-Augmented Generation (
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
-TOP_K = 3
+TOP_K = 8
 
 SUGGESTED_QUESTIONS = [
     "Summarize this document in 5 bullet points.",
