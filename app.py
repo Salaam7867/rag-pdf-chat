@@ -163,6 +163,35 @@ STRICT RULES:
 9. Never recommend adding fabricated skills or achievements.
 10. Evaluate fairly for the experience level of the job.
 
+11. Never infer technical knowledge from a related concept.
+    For example, embeddings do not automatically prove
+    tokenization knowledge.
+
+12. Never infer regular Git/version-control practices merely
+    because projects are hosted on GitHub.
+
+13. Never generate hypothetical resume bullets containing
+    unverified skills, tools, metrics, or achievements.
+
+14. Divide resume improvement suggestions into:
+    - Verified improvements: supported by existing evidence.
+    - Candidate confirmation required: ask whether the
+      candidate has actually performed the activity.
+    Never present unverified suggestions as ready-to-use bullets.
+
+15. Do not classify soft skills such as analytical thinking
+    as missing technical skills. Mark them as "Evidence unclear."
+
+16. Page numbers must use human-readable numbering starting
+    from 1. Convert zero-based PDF page metadata accordingly.
+
+17. If the resume has one page, never cite page 2 or higher.
+
+18. Always complete every requested output section,
+    including all five interview questions and the final
+    recommendation. Never silently omit a section.
+
+
 SCORING:
 - Technical skills: 35 points
 - Relevant projects and experience: 30 points
