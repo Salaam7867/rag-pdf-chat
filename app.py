@@ -290,19 +290,34 @@ if file:
     pdf_bytes = file.getvalue()
     file_hash = hashlib.md5(pdf_bytes).hexdigest()
 
-    if (
-        "file_hash" not in st.session_state
-        or st.session_state.get("file_hash") != file_hash
-    ):
-        with st.spinner("Processing..."):
-            chunks, pages, chunk_count, chunk_embeddings = process_pdf_bytes(pdf_bytes)
+    
+if (
+    "file_hash" not in st.session_state
+    or st.session_state.get("file_hash") != file_hash
+):
+    # Clear results from the previously uploaded resume
+    st.session_state.pop("analysis_result", None)
+    st.session_state.pop("retrieved_context", None)
+    st.session_state.pop("retrieved_sources", None)
+    st.session_state.pop("analyzed_question", None)
 
-        st.session_state["file_hash"] = file_hash
-        st.session_state["chunks"] = chunks
-        st.session_state["chunk_embeddings"] = chunk_embeddings
-        st.session_state["pages"] = pages
-        st.session_state["chunk_count"] = chunk_count
-        st.session_state["file_name"] = file.name
+    with st.spinner("Processing..."):
+        chunks, pages, chunk_count, chunk_embeddings = process_pdf_bytes(pdf_bytes)
+
+    st.session_state["file_hash"] = file_hash
+    st.session_state["chunks"] = chunks
+    st.session_state["chunk_embeddings"] = chunk_embeddings
+    st.session_state["pages"] = pages
+    st.session_state["chunk_count"] = chunk_count
+    st.session_state["file_name"] = file.name
+
+
+        
+    st.session_state["chunks"] = chunks
+    st.session_state["chunk_embeddings"] = chunk_embeddings
+    st.session_state["pages"] = pages
+    st.session_state["chunk_count"] = chunk_count
+    st.session_state["file_name"] = file.name
 
     chunks = st.session_state["chunks"]
     chunk_embeddings = st.session_state["chunk_embeddings"]
