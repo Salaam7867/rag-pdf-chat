@@ -405,10 +405,13 @@ if st.session_state.get("analysis_result"):
             chunk = item["chunk"]
             score = item["score"]
             page_num = chunk.metadata.get("page", 0) + 1
+            score_text = (
+                f"{score:.4f}" if score is not None else "Full document"
+            )
 
             st.write(
                 f"Source {i} | Page: {page_num} | "
-                f"Similarity: {score:.4f}"
+                f"Similarity: {score_text}"
             )
 
             st.write(chunk.page_content)
