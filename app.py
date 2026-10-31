@@ -358,12 +358,7 @@ if analyze_clicked:
     else:
         with st.spinner("Analyzing resume against job description..."):
 
-            retrieved = simple_retrieval(
-                chunks,
-                chunk_embeddings,
-                question,
-                TOP_K
-            )
+            retrieved = [{"chunk": chunk, "score": None} for chunk in chunks]
 
             if not retrieved:
                 st.warning("No relevant resume content found.")
