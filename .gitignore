@@ -1,4 +1,22 @@
+# Environment variables and secrets
 .env
-.ipynb_checkpoints/
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Testing
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local Qdrant database
+qdrant_storage/

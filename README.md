@@ -1,86 +1,57 @@
-# 🚀 InsightRAG – Context-Aware PDF Question Answering
+# InsightRAG — PDF Question Answering
 
-**InsightRAG** is an AI-powered application that enables users to interact with PDF documents using natural language. It leverages Retrieval-Augmented Generation (RAG) to deliver precise, context-grounded answers while minimizing hallucinations.
+InsightRAG lets users upload a PDF, ask natural-language questions, and receive answers grounded in retrieved document passages.
 
----
+## Current pipeline
 
-## 🔥 Key Highlights
-
-* 📄 Upload and analyze PDF documents instantly
-* 🧠 Context-aware retrieval using semantic embeddings
-* 💬 Ask questions in natural language
-* ⚡ Low-latency responses powered by Groq (LLaMA 3)
-* 🔎 Source transparency with retrievable document chunks
-* 🚫 Strict context-based answering to reduce hallucinations
-
----
-
-## 🧠 How It Works
-```
-PDF → Text Extraction → Chunking → Embeddings → Retrieval → LLM → Answer
+```text
+PDF upload → PDF extraction → chunking → Hugging Face embeddings
+→ NumPy cosine-similarity retrieval → Groq answer generation → source passages
 ```
 
-1. Upload a PDF document
-2. Extract and split text into manageable chunks
-3. Convert chunks into vector embeddings
-4. Retrieve the most relevant chunks for a query
-5. Generate answers using only retrieved context
+## Project structure
 
----
+```text
+app.py
+src/
+  config/settings.py
+  embeddings/provider.py
+  ingestion/pdf_processor.py
+  retrieval/semantic.py
+  generation/answer.py
+  utils/secrets.py
+tests/
+```
 
-## 🏗️ Tech Stack
-
-* **Backend:** Python
-* **Frontend:** Streamlit
-* **Framework:** LangChain
-* **Embeddings:** HuggingFace
-* **LLM:** Groq API (LLaMA 3)
-* **Utilities:** NumPy
-
----
-
-## 🚀 Live Demo
-
-Try it here:
-👉 https://rag-pdf-chat-7867.streamlit.app/
-
----
-
-## ⚙️ Installation & Setup
+## Setup
 
 ```bash
-git clone https://github.com/Salaam7867/InsightRAG
-cd InsightRAG
+python -m venv .venv
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+# source .venv/bin/activate
+
 pip install -r requirements.txt
+```
+
+Configure `GROQ_API_KEY` using either:
+
+- Environment variable `GROQ_API_KEY`, or
+- `.streamlit/secrets.toml` containing `GROQ_API_KEY = "your-key"`.
+
+Run the application:
+
+```bash
 streamlit run app.py
 ```
 
----
+Run the unit tests:
 
-## 🎯 Use Cases
+```bash
+pytest -q
+```
 
-* Research paper analysis
-* Legal/document review
-* Study material Q&A
-* Business report insights
+## Current scope
 
----
-
-## 📌 Future Improvements
-
-* Multi-document querying
-* Chat history memory
-* Advanced ranking (rerankers)
-* Support for more file formats
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome. Fork the repo, create a feature branch, and submit a pull request.
-
----
-
-## 📄 License
-
-This project is open-source and available under the MIT License.
+This milestone is a structural refactor. It intentionally preserves the existing embedding model, NumPy-based dense retrieval, Groq model, and Streamlit user experience. Persistent vector storage, hybrid retrieval, reranking, agentic workflows, and full RAG evaluation are planned for later milestones.
