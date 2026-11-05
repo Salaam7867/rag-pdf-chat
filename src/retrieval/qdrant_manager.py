@@ -10,14 +10,23 @@ from src.config.settings import QDRANT_COLLECTION_NAME
 
 
 @st.cache_resource
+def get_qdrant_client() -> QdrantClient:
+    """Initialize a persistent local Qdrant client and set FastEmbed models."""
+    # Persistent local storage (fixes data disappearing on restart)
+    client = QdrantClient(path="./qdrant_storage")
+    
+    # Configure FastEmbed models
+    client.set_model("sentence-transformers/all-MiniLM-L6-v2")
+    client.set_sparse_model("Qdrant/bm25")
+    
+    init_collection(client)
+    return client
+
+
 def init_collection(client: QdrantClient) -> None:
     """Create the collection with explicit dense and sparse vector configurations."""
     collections = [col.name for col in client.get_collections().collections]
     if QDRANT_COLLECTION_NAME not in collections:
-        # We must set the models first so get_embedding_size works
-        client.set_model("sentence-transformers/all-MiniLM-L6-v2")
-        client.set_sparse_model("Qdrant/bm25")
-        
         client.create_collection(
             collection_name=QDRANT_COLLECTION_NAME,
             vectors_config={
@@ -31,6 +40,7 @@ def init_collection(client: QdrantClient) -> None:
             },
         )
 
+
 def index_chunks(
     client: QdrantClient,
     chunks: List[Any],
@@ -38,9 +48,29 @@ def index_chunks(
     doc_hash: str,
     doc_role: str = "general"
 ) -> None:
-    """Index raw text chunks into Qdrant. FastEmbed generates vectors automatically."""
+    """Index raw text chunks into Qdrant, clearing stale chunks first."""
     
-    # 2. Extract raw text and metadata
+    if not chunks:
+        return
+
+    # 1. DELETE OLD STALE CHUNKS: 
+    # If this document was uploaded before with a different chunk count,
+    # clear out all old points matching this doc_hash to prevent ghost chunks.
+    try:
+        client.delete(
+            collection_name=QDRANT_COLLECTION_NAME,
+            points_selector=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="doc_hash",
+                        match=models.MatchValue(value=doc_hash),
+                    )
+                ]
+            ),
+        )
+    except Exception:
+        pass  # Collection might be empty initially
+
     documents = [chunk.page_content for chunk in chunks]
     metadata = []
     ids = []
@@ -48,7 +78,7 @@ def index_chunks(
     for i, chunk in enumerate(chunks):
         page_num = chunk.metadata.get("page", 0) + 1
         
-        # Deterministic UUID to prevent duplicates
+        # Deterministic UUID based on doc_hash and index
         chunk_unique_str = f"{doc_hash}_chunk_{i}"
         ids.append(str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk_unique_str)))
         
@@ -61,7 +91,7 @@ def index_chunks(
             "text": chunk.page_content,
         })
 
-    # 3. client.add() replaces client.upsert(). It takes text, not vectors!
+    # Add fresh chunks via FastEmbed
     client.add(
         collection_name=QDRANT_COLLECTION_NAME,
         documents=documents,
@@ -88,7 +118,6 @@ def hybrid_search(
             ]
         )
 
-    # Using ChatGPT's exact prefetch syntax with models.Document
     hits = client.query_points(
         collection_name=QDRANT_COLLECTION_NAME,
         prefetch=[
