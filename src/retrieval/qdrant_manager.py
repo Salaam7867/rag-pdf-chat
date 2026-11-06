@@ -4,7 +4,7 @@ import uuid
 from typing import Any, List, Optional
 import streamlit as st
 from qdrant_client import QdrantClient, models
-
+from src.utils.secrets import get_qdrant_credentials
 from src.config.settings import QDRANT_COLLECTION_NAME
 
 DENSE_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -14,15 +14,24 @@ DENSE_VECTOR_SIZE = 384  # Output dimension of all-MiniLM-L6-v2
 
 @st.cache_resource
 def get_qdrant_client() -> QdrantClient:
-    """Initialize a persistent local Qdrant client."""
-    client = QdrantClient(path="./qdrant_storage")
+    """Connect to the Qdrant Cloud cluster."""
+
+    qdrant_url, qdrant_api_key = get_qdrant_credentials()
+
+    client = QdrantClient(
+        url=qdrant_url,
+        api_key=qdrant_api_key,
+    )
+
     init_collection(client)
+
     return client
 
 
 def init_collection(client: QdrantClient) -> None:
     """Create the collection with explicit dense and sparse vector configurations."""
     collections = [col.name for col in client.get_collections().collections]
+
     if QDRANT_COLLECTION_NAME not in collections:
         client.create_collection(
             collection_name=QDRANT_COLLECTION_NAME,
@@ -34,11 +43,17 @@ def init_collection(client: QdrantClient) -> None:
             },
             sparse_vectors_config={
                 "sparse": models.SparseVectorParams(
-                modifier=models.Modifier.IDF
-            )
+                    modifier=models.Modifier.IDF
+                )
             },
         )
 
+    client.create_payload_index(
+        collection_name=QDRANT_COLLECTION_NAME,
+        field_name="doc_hash",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+        wait=True,
+    )
 
 def document_exists(client: QdrantClient, doc_hash: str) -> bool:
     """Check whether a document is already indexed in Qdrant."""
