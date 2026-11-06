@@ -6,7 +6,12 @@ import streamlit as st
 from src.config.settings import APP_CAPTION, APP_TITLE, SUGGESTED_QUESTIONS, CANDIDATE_POOL_K
 from src.generation.answer import generate_answer, load_llm
 from src.ingestion.pdf_processor import process_pdf_bytes
-from src.retrieval.qdrant_manager import get_qdrant_client, index_chunks, hybrid_search
+from src.retrieval.qdrant_manager import (
+    get_qdrant_client,
+    index_chunks,
+    hybrid_search,
+    document_exists,
+)
 from src.retrieval.reranker import rerank_hits  # 1. Import the re-ranker
 from src.utils.secrets import get_groq_api_key
 
@@ -39,32 +44,53 @@ file_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
 if st.session_state.get("file_hash") != file_hash:
     try:
-        with st.spinner("Extracting text and indexing into Qdrant (FastEmbed)..."):
-            chunks, page_count, chunk_count = process_pdf_bytes(pdf_bytes)
-            index_chunks(
-                client=qdrant_client,
-                chunks=chunks,
-                doc_name=uploaded_file.name,
-                doc_hash=file_hash
+        if document_exists(qdrant_client, file_hash):
+            st.session_state.update(
+                {
+                    "file_hash": file_hash,
+                    "pages": None,
+                    "chunk_count": None,
+                    "file_name": uploaded_file.name,
+                    "already_indexed": True,
+                }
             )
-            
+
+        else:
+            with st.spinner("Extracting text and indexing into Qdrant (FastEmbed)..."):
+                chunks, page_count, chunk_count = process_pdf_bytes(pdf_bytes)
+
+                index_chunks(
+                    client=qdrant_client,
+                    chunks=chunks,
+                    doc_name=uploaded_file.name,
+                    doc_hash=file_hash,
+                )
+
+            st.session_state.update(
+                {
+                    "file_hash": file_hash,
+                    "pages": page_count,
+                    "chunk_count": chunk_count,
+                    "file_name": uploaded_file.name,
+                    "already_indexed": False,
+                }
+            )
+
     except Exception as exc:
         st.error(f"Could not process this PDF: {exc}")
         st.stop()
 
-    st.session_state.update(
-        {
-            "file_hash": file_hash,
-            "pages": page_count,
-            "chunk_count": chunk_count,
-            "file_name": uploaded_file.name,
-        }
+if st.session_state.get("already_indexed"):
+    st.success(
+        f"{st.session_state['file_name']} is already indexed in Qdrant. "
+        "Skipping PDF extraction and indexing."
     )
-
-st.success(
-    f"{st.session_state['file_name']} | "
-    f"{st.session_state['pages']} pages → {st.session_state['chunk_count']} chunks indexed in Qdrant."
-)
+else:
+    st.success(
+        f"{st.session_state['file_name']} | "
+        f"{st.session_state['pages']} pages → "
+        f"{st.session_state['chunk_count']} chunks indexed in Qdrant."
+    )
 
 question = st.text_input("Ask a question", key="question_text")
 if question.strip():
