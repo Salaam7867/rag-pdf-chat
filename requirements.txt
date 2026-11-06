@@ -9,5 +9,5 @@ pypdf
 numpy
 torch
 pytest
-qdrant-client>=1.9.0
+qdrant-client[fastembed]>=1.9.0
 rank-bm25>=0.2.2

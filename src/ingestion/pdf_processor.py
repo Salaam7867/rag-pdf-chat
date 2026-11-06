@@ -1,19 +1,21 @@
-"""PDF extraction and chunking (Embeddings are now handled by Qdrant FastEmbed)."""
+"""PDF extraction and chunking with thread-safe / robust extraction."""
 
+import io
 import os
 import tempfile
-from typing import Any
+from typing import Any, List
 
 import streamlit as st
-from langchain_community.document_loaders import PyPDFLoader
+from pypdf import PdfReader
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.config.settings import CHUNK_OVERLAP, CHUNK_SIZE
 
 
 @st.cache_data(show_spinner=False)
-def process_pdf_bytes(pdf_bytes: bytes) -> tuple[list[Any], int, int]:
-    """Extract a PDF and split it into chunks.
+def process_pdf_bytes(pdf_bytes: bytes) -> tuple[List[Document], int, int]:
+    """Extract a PDF and split it into chunks safely.
     
     Returns:
         (chunks, page_count, chunk_count)
@@ -21,24 +23,38 @@ def process_pdf_bytes(pdf_bytes: bytes) -> tuple[list[Any], int, int]:
     if not pdf_bytes:
         raise ValueError("The uploaded PDF is empty.")
 
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(pdf_bytes)
-            temp_path = tmp.name
+    documents: List[Document] = []
+    
+    # Use direct in-memory stream with pypdf and strict=False
+    stream = io.BytesIO(pdf_bytes)
+    reader = PdfReader(stream, strict=False)
+    page_count = len(reader.pages)
 
-        documents = PyPDFLoader(temp_path).load()
-        if not documents:
-            raise ValueError("No readable pages were found in this PDF.")
+    if page_count == 0:
+        raise ValueError("No readable pages were found in this PDF.")
 
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-        )
-        chunks = splitter.split_documents(documents)
+    for i, page in enumerate(reader.pages):
+        try:
+            # Extract plain text per page defensively
+            text = page.extract_text() or ""
+            if text.strip():
+                documents.append(
+                    Document(
+                        page_content=text,
+                        metadata={"page": i}
+                    )
+                )
+        except Exception:
+            # Skip corrupted or non-extractable single pages without halting the document
+            continue
 
-        return chunks, len(documents), len(chunks)
+    if not documents:
+        raise ValueError("No extractable text was found in this PDF.")
 
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            os.remove(temp_path)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
+    chunks = splitter.split_documents(documents)
+
+    return chunks, page_count, len(chunks)
