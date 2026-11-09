@@ -154,24 +154,32 @@ if question.strip():
         all_hits = []
 
         # Retrieve candidates independently from each PDF.
-        for doc in active_docs:
+        final_hits = []
+        total_candidates = 0
 
+        # Retrieve and Re-Rank independently for each PDF
+        for doc in active_docs:
             document_hits = hybrid_search(
                 client=qdrant_client,
                 query_text=question,
                 doc_hash=doc["file_hash"],
                 limit=CANDIDATE_POOL_K,
             )
+            
+            total_candidates += len(document_hits)
+            
+            if document_hits:
+                with st.spinner(f"Re-ranking evidence for {doc['file_name']}..."):
+                    # Take the top chunks PER DOCUMENT (e.g., top 2 or 3)
+                    top_doc_hits = rerank_hits(question, document_hits, top_k=3) 
+                    final_hits.extend(top_doc_hits)
 
-            all_hits.extend(document_hits)
-
-        if not all_hits:
+        if not final_hits:
             st.warning("No relevant content found in the uploaded PDFs.")
             st.stop()
 
-        # Rerank candidates from all PDFs together.
-        with st.spinner("Re-ranking retrieved evidence..."):
-            final_hits = rerank_hits(question, all_hits)
+        # Optionally sort the combined final_hits by re-rank score
+        final_hits = sorted(final_hits, key=lambda x: x["rerank_score"], reverse=True)
 
         # Preserve document-level source attribution.
         context = "\n\n".join(
