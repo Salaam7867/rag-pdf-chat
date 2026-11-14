@@ -147,13 +147,44 @@ for doc in active_docs:
 
 st.caption(f"{len(active_docs)} document(s) available.")
 
-question = st.text_input("Ask a question", key="question_text")
+# 1. Initialize chat history in session state
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
 
-if question.strip():
+# 2. Render previous messages from history on every rerun
+for msg in st.session_state["messages"]:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+        if msg["role"] == "assistant" and "caption" in msg:
+            st.caption(msg["caption"])
+
+            with st.expander("Retrieved context"):
+                st.caption(f"Context sent to LLM: {len(msg['context']):,} characters")
+                st.text(msg["context"])
+
+            with st.expander("Sources"):
+                for rank, hit in enumerate(msg["sources"], start=1):
+                    st.write(
+                        f"**Source {rank}** | "
+                        f"Document: {hit['doc_name']} | "
+                        f"Page: {hit['page_number']} | "
+                        f"Re-rank Score: {hit['rerank_score']:.4f}"
+                    )
+                    st.write(hit["text"][:400])
+                    st.divider()
+
+# 3. Accept input from either the bottom chat bar OR your sidebar Demo Prompt buttons
+question = st.chat_input("Ask a question...") or st.session_state.pop("question_text", None)
+
+if question and question.strip():
+    # Display and save the user message immediately
+    with st.chat_message("user"):
+        st.markdown(question)
+    st.session_state["messages"].append({"role": "user", "content": question})
+
     try:
         all_hits = []
-
-        # Retrieve candidates independently from each PDF.
         final_hits = []
         total_candidates = 0
 
@@ -165,56 +196,69 @@ if question.strip():
                 doc_hash=doc["file_hash"],
                 limit=CANDIDATE_POOL_K,
             )
-            
+
             total_candidates += len(document_hits)
-            
+            all_hits.extend(document_hits)
+
             if document_hits:
                 with st.spinner(f"Re-ranking evidence for {doc['file_name']}..."):
-                    # Take the top chunks PER DOCUMENT (e.g., top 2 or 3)
-                    top_doc_hits = rerank_hits(question, document_hits, top_k=3) 
+                    top_doc_hits = rerank_hits(question, document_hits, top_k=3)
                     final_hits.extend(top_doc_hits)
 
         if not final_hits:
-            st.warning("No relevant content found in the uploaded PDFs.")
+            with st.chat_message("assistant"):
+                st.warning("No relevant content found in the uploaded PDFs.")
             st.stop()
 
-        # Optionally sort the combined final_hits by re-rank score
+        # Sort the combined final_hits by re-rank score
         final_hits = sorted(final_hits, key=lambda x: x["rerank_score"], reverse=True)
 
-        # Preserve document-level source attribution.
+        # Preserve document-level source attribution
         context = "\n\n".join(
             f"[Document: {hit['doc_name']} | Page: {hit['page_number']}]\n"
             f"{hit['text']}"
             for hit in final_hits
         )
 
-        with st.spinner("Generating answer..."):
-            answer = generate_answer(context, question, llm)
+        # Generate and display the assistant response inside a chat bubble
+        with st.chat_message("assistant"):
+            with st.spinner("Generating answer..."):
+                answer = generate_answer(context, question, llm)
 
-        st.subheader("Answer")
-        st.write(answer)
+            st.markdown(answer)
 
-        st.caption(
-            f"Used {len(final_hits)} re-ranked chunks "
-            f"from {len(all_hits)} retrieved candidates."
-        )
-
-        with st.expander("Retrieved context"):
-            st.write(context)
-
-        st.subheader("Sources")
-
-        for rank, hit in enumerate(final_hits, start=1):
-
-            st.write(
-                f"Source {rank} | "
-                f"Document: {hit['doc_name']} | "
-                f"Page: {hit['page_number']} | "
-                f"Re-rank Score: {hit['rerank_score']:.4f}"
+            stats_caption = (
+                f"Retrieved {len(all_hits)} candidates across "
+                f"{len(active_docs)} documents. "
+                f"Selected {len(final_hits)} chunks after per-document reranking."
             )
+            st.caption(stats_caption)
 
-            st.write(hit["text"][:400])
-            st.divider()
+            with st.expander("Retrieved context"):
+                st.caption(f"Context sent to LLM: {len(context):,} characters")
+                st.text(context)
+
+            with st.expander("Sources"):
+                for rank, hit in enumerate(final_hits, start=1):
+                    st.write(
+                        f"**Source {rank}** | "
+                        f"Document: {hit['doc_name']} | "
+                        f"Page: {hit['page_number']} | "
+                        f"Re-rank Score: {hit['rerank_score']:.4f}"
+                    )
+                    st.write(hit["text"][:400])
+                    st.divider()
+
+        # Save the assistant message + metadata so it stays visible on future questions
+        st.session_state["messages"].append(
+            {
+                "role": "assistant",
+                "content": answer,
+                "caption": stats_caption,
+                "context": context,
+                "sources": final_hits,
+            }
+        )
 
     except Exception as exc:
         st.error(f"Something went wrong while answering: {exc}")
